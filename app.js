@@ -82,8 +82,14 @@ const el = {
 // supaya kalau CONFIG.UNITS diubah, seluruh UI otomatis ikut berubah)
 // ============================================================================
 function initUnitOptionsUI() {
-  // Opsi dropdown "Unit AC" di form Catat Servis
+  // Opsi dropdown "Unit AC" di form Catat Servis.
+  // Buang dulu semua <option> selain placeholder (option pertama) sebelum
+  // mengisi ulang — jaga-jaga kalau ada opsi hardcode lama tersisa di HTML
+  // (versi index.html yang belum ter-update), supaya tidak dobel.
   const select = document.querySelector("#input-unit");
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
   CONFIG.UNITS.forEach((unit) => {
     const opt = document.createElement("option");
     opt.value = unit.name;
@@ -91,7 +97,10 @@ function initUnitOptionsUI() {
     select.appendChild(opt);
   });
 
-  // Chip filter di tab Riwayat (selain chip "Semua" yang sudah ada di HTML)
+  // Chip filter di tab Riwayat — buang dulu semua chip selain "Semua" (chip pertama).
+  while (el.riwayatFilter.children.length > 1) {
+    el.riwayatFilter.removeChild(el.riwayatFilter.lastChild);
+  }
   CONFIG.UNITS.forEach((unit) => {
     const btn = document.createElement("button");
     btn.dataset.filter = unit.name;
