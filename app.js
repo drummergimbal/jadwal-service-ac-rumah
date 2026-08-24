@@ -43,9 +43,20 @@ const CONFIG = {
 // ============================================================================
 // STATE
 // ============================================================================
-let allRecords = []; // seluruh data riwayat servis dari server/cache
+let allRecords = []; // seluruh data riwayat servis dari server/cache (aktif MAUPUN arsip)
 let activeRiwayatFilter = "Semua";
 let activeKalenderContext = null; // { unit, nextDate }
+let editingRecordId = null; // null = mode tambah baru, terisi = sedang edit record dengan ID ini
+let confirmCallback = null; // fungsi yang dijalankan kalau modal konfirmasi ditekan "Ya"
+
+const STATUS_ARSIP = "Arsip";
+
+/** Record dianggap arsip HANYA kalau recordStatus eksplisit "Arsip".
+ *  Data lama (sebelum kolom Status ada di Sheets) tidak punya field ini sama
+ *  sekali -> harus dianggap AKTIF, bukan malah hilang dari Riwayat/Dashboard. */
+function isArchived(r) {
+  return r.recordStatus === STATUS_ARSIP;
+}
 
 // ============================================================================
 // DOM SHORTCUTS
@@ -60,11 +71,13 @@ const el = {
   summaryBadge: $("#summary-badge"),
   riwayatList: $("#riwayat-list"),
   riwayatFilter: $("#riwayat-filter"),
+  arsipList: $("#arsip-list"),
   btnRefresh: $("#btn-refresh"),
   refreshIcon: $("#refresh-icon"),
   btnExportPdf: $("#btn-export-pdf"),
   btnFab: $("#btn-fab"),
   modalServis: $("#modal-servis"),
+  modalServisTitle: $("#modal-servis-title"),
   formServis: $("#form-servis"),
   btnSubmitServis: $("#btn-submit-servis"),
   btnSubmitLabel: $("#btn-submit-label"),
@@ -72,6 +85,10 @@ const el = {
   kalenderInfo: $("#kalender-info"),
   btnAddGoogleCalendar: $("#btn-add-google-calendar"),
   btnDownloadIcs: $("#btn-download-ics"),
+  modalConfirm: $("#modal-confirm"),
+  confirmTitle: $("#confirm-title"),
+  confirmMessage: $("#confirm-message"),
+  btnConfirmYes: $("#btn-confirm-yes"),
   toast: $("#toast"),
   loadingOverlay: $("#loading-overlay"),
   pdfTemplate: $("#pdf-export-template")
@@ -119,12 +136,43 @@ const BULAN_ID = [
   "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
 ];
 
-/** Parse "YYYY-MM-DD" -> Date (jam 12:00 lokal, menghindari pergeseran timezone) */
+/** Parse "YYYY-MM-DD" -> Date (jam 12:00 lokal, menghindari pergeseran timezone).
+ *  Punya fallback untuk format tanggal lain (mis. data lama dari sebelum
+ *  Code.gs diperbaiki, yang sempat mengirim "Mon Aug 24 2026 00:00:00 GMT+..."
+ *  alih-alih "YYYY-MM-DD") supaya tidak dianggap "tidak ada data servis"
+ *  hanya karena formatnya belum standar. */
 function parseDateStr(str) {
   if (!str) return null;
-  const [y, m, d] = str.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 12, 0, 0);
+  const s = String(str).trim();
+
+  let match = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const y = Number(match[1]), m = Number(match[2]), d = Number(match[3]);
+    if (y && m && d) return new Date(y, m - 1, d, 12, 0, 0);
+  }
+
+  // Fallback #1: format hasil Date.toString() (mis. "Mon Aug 24 2026 00:00:00
+  // GMT+0700 (...)"), yang sempat dikirim backend versi lama sebelum Code.gs
+  // diperbaiki. Komponen tanggal diambil LANGSUNG dari teksnya (bukan lewat
+  // `new Date(s)` lalu baca local Y/M/D) supaya tidak bergeser 1 hari
+  // tergantung timezone perangkat/browser yang membuka aplikasi.
+  const BULAN_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  match = s.match(/^\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{4})/);
+  if (match) {
+    const monthIdx = BULAN_EN.indexOf(match[1]);
+    const d = Number(match[2]), y = Number(match[3]);
+    if (monthIdx !== -1 && d && y) return new Date(y, monthIdx, d, 12, 0, 0);
+  }
+
+  // Fallback #2 (terakhir): biarkan JavaScript mencoba parse format lain yang
+  // belum diantisipasi di atas. Ini masih bisa bergeser tergantung timezone
+  // browser, tapi lebih baik daripada dianggap "tidak ada data servis".
+  const fallback = new Date(s);
+  if (!isNaN(fallback.getTime())) {
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0);
+  }
+
+  return null;
 }
 
 /** Date -> "YYYY-MM-DD" */
@@ -195,11 +243,17 @@ function loadCache() {
   }
 }
 
+/** Pastikan tiap record punya recordStatus (data lama dari sebelum ada kolom
+ *  Status di Sheets tidak punya field ini -> default "Aktif", bukan hilang). */
+function normalizeRecords(records) {
+  return (records || []).map((r) => ({ ...r, recordStatus: r.recordStatus || "Aktif" }));
+}
+
 async function fetchServiceData() {
   if (!isConfigured()) {
     el.headerSubtitle.textContent = "⚠️ URL Google Apps Script belum diatur";
     const cached = loadCache();
-    allRecords = cached ? cached.data : [];
+    allRecords = normalizeRecords(cached ? cached.data : []);
     renderAll();
     return;
   }
@@ -209,7 +263,7 @@ async function fetchServiceData() {
     const json = await res.json();
     if (json.status !== "success") throw new Error(json.message || "Gagal mengambil data");
 
-    allRecords = json.data || [];
+    allRecords = normalizeRecords(json.data);
     saveCache(allRecords);
     el.offlineBanner.classList.add("hidden");
     el.headerSubtitle.textContent = `Terakhir sinkron: ${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`;
@@ -217,7 +271,7 @@ async function fetchServiceData() {
     console.warn("[fetchServiceData] gagal:", err);
     const cached = loadCache();
     if (cached) {
-      allRecords = cached.data;
+      allRecords = normalizeRecords(cached.data);
       el.offlineBanner.classList.remove("hidden");
       el.headerSubtitle.textContent = "Data tersimpan (offline)";
     } else {
@@ -253,6 +307,48 @@ async function submitServiceRecord(payload) {
   }
 }
 
+async function archiveRecord(id) {
+  if (!isConfigured()) {
+    showToast("URL Google Apps Script belum diatur di app.js", "error");
+    return false;
+  }
+  try {
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "archive", id })
+    });
+    const json = await res.json();
+    if (json.status !== "success") throw new Error(json.message || "Gagal menghapus data");
+    return true;
+  } catch (err) {
+    console.error("[archiveRecord] gagal:", err);
+    showToast("Gagal menghapus: " + err.message, "error");
+    return false;
+  }
+}
+
+async function restoreRecord(id) {
+  if (!isConfigured()) {
+    showToast("URL Google Apps Script belum diatur di app.js", "error");
+    return false;
+  }
+  try {
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "restore", id })
+    });
+    const json = await res.json();
+    if (json.status !== "success") throw new Error(json.message || "Gagal memulihkan data");
+    return true;
+  } catch (err) {
+    console.error("[restoreRecord] gagal:", err);
+    showToast("Gagal memulihkan: " + err.message, "error");
+    return false;
+  }
+}
+
 // ============================================================================
 // LOGIKA STATUS UNIT AC
 // ============================================================================
@@ -260,11 +356,15 @@ async function submitServiceRecord(payload) {
  * Mengembalikan record terakhir (berdasarkan tanggalServis) untuk sebuah unit.
  */
 function getLatestRecordForUnit(unitName) {
+  const target = (unitName || "").trim().toLowerCase();
   const records = allRecords
     // "tanggalServis" wajib ada DAN harus bisa di-parse jadi tanggal valid (format YYYY-MM-DD).
     // Baris dengan format tanggal rusak di Google Sheets sengaja diabaikan di sini,
     // supaya tidak membuat seluruh dashboard gagal render (lihat catatan di renderDashboard).
-    .filter((r) => r.unitAC === unitName && r.tanggalServis && parseDateStr(r.tanggalServis))
+    // Pencocokan nama unit di-trim+lowercase supaya tidak gagal gara-gara spasi/kapital
+    // ekstra yang mungkin masuk lewat Google Sheets. Record yang sudah diarsipkan (dihapus)
+    // TIDAK dihitung sebagai servis terakhir.
+    .filter((r) => (r.unitAC || "").trim().toLowerCase() === target && !isArchived(r) && r.tanggalServis && parseDateStr(r.tanggalServis))
     .sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
   return records[0] || null;
 }
@@ -388,7 +488,9 @@ function renderDashboard() {
 // RENDER: RIWAYAT
 // ============================================================================
 function renderRiwayat() {
-  let records = [...allRecords].sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
+  let records = allRecords
+    .filter((r) => !isArchived(r))
+    .sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
 
   if (activeRiwayatFilter !== "Semua") {
     records = records.filter((r) => r.unitAC === activeRiwayatFilter);
@@ -402,10 +504,44 @@ function renderRiwayat() {
   el.riwayatList.innerHTML = records.map((r) => `
     <div class="riwayat-item">
       <div class="flex items-start justify-between gap-2">
-        <div>
-          <p class="font-semibold text-sm">${r.unitAC}</p>
+        <div class="min-w-0">
+          <p class="font-semibold text-sm">${escapeHtml(r.unitAC)}</p>
           <p class="text-xs text-slate-400 mt-0.5">${formatDateID(parseDateStr(r.tanggalServis))}${r.namaTeknisi ? " · " + escapeHtml(r.namaTeknisi) : ""}</p>
         </div>
+        <div class="flex gap-1.5 shrink-0">
+          <button class="riwayat-icon-btn" data-action="edit-riwayat" data-id="${escapeHtml(r.id)}" aria-label="Edit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+          </button>
+          <button class="riwayat-icon-btn riwayat-icon-btn-danger" data-action="hapus-riwayat" data-id="${escapeHtml(r.id)}" aria-label="Hapus">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+          </button>
+        </div>
+      </div>
+      ${r.catatan ? `<p class="text-xs text-slate-600 mt-2 leading-relaxed">${escapeHtml(r.catatan)}</p>` : ""}
+    </div>
+  `).join("");
+}
+
+function renderArsip() {
+  const records = allRecords
+    .filter((r) => isArchived(r))
+    .sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
+
+  if (records.length === 0) {
+    el.arsipList.innerHTML = `<p class="text-sm text-slate-400 text-center py-10">Belum ada riwayat yang diarsipkan.</p>`;
+    return;
+  }
+
+  el.arsipList.innerHTML = records.map((r) => `
+    <div class="riwayat-item riwayat-item-arsip">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="font-semibold text-sm">${escapeHtml(r.unitAC)}</p>
+          <p class="text-xs text-slate-400 mt-0.5">${formatDateID(parseDateStr(r.tanggalServis))}${r.namaTeknisi ? " · " + escapeHtml(r.namaTeknisi) : ""}</p>
+        </div>
+        <button class="restore-btn shrink-0" data-action="pulihkan-riwayat" data-id="${escapeHtml(r.id)}">
+          Pulihkan
+        </button>
       </div>
       ${r.catatan ? `<p class="text-xs text-slate-600 mt-2 leading-relaxed">${escapeHtml(r.catatan)}</p>` : ""}
     </div>
@@ -421,6 +557,7 @@ function escapeHtml(str) {
 function renderAll() {
   renderDashboard();
   renderRiwayat();
+  renderArsip();
 }
 
 // ============================================================================
@@ -438,29 +575,129 @@ $$(".nav-btn").forEach((btn) => {
 // ============================================================================
 // MODAL: TAMBAH SERVIS
 // ============================================================================
+/** Buka modal dalam mode TAMBAH baru (opsional: unit AC sudah dipilihkan). */
 function openServisModal(prefillUnit) {
+  editingRecordId = null;
   el.formServis.reset();
   $("#input-tanggal").value = toDateStr(new Date());
   if (prefillUnit) $("#input-unit").value = prefillUnit;
+  el.modalServisTitle.textContent = "Catat Servis Baru";
+  el.btnSubmitLabel.textContent = "Simpan";
+  el.modalServis.classList.remove("hidden");
+}
+
+/** Buka modal dalam mode EDIT, terisi otomatis dari data record yang sudah ada. */
+function openEditModal(record) {
+  editingRecordId = record.id;
+  el.formServis.reset();
+  $("#input-unit").value = record.unitAC;
+  $("#input-tanggal").value = record.tanggalServis;
+  $("#input-teknisi").value = record.namaTeknisi || "";
+  $("#input-catatan").value = record.catatan || "";
+  el.modalServisTitle.textContent = "Edit Servis";
+  el.btnSubmitLabel.textContent = "Simpan Perubahan";
   el.modalServis.classList.remove("hidden");
 }
 
 function closeServisModal() {
   el.modalServis.classList.add("hidden");
+  editingRecordId = null;
 }
 
 el.btnFab.addEventListener("click", () => openServisModal());
 $$("[data-close-modal]").forEach((elx) => elx.addEventListener("click", closeServisModal));
 
+// ============================================================================
+// MODAL: KONFIRMASI (generik, dipakai untuk konfirmasi Hapus)
+// ============================================================================
+function openConfirmModal(title, message, onConfirm) {
+  el.confirmTitle.textContent = title;
+  el.confirmMessage.textContent = message;
+  confirmCallback = onConfirm;
+  el.modalConfirm.classList.remove("hidden");
+}
+
+function closeConfirmModal() {
+  el.modalConfirm.classList.add("hidden");
+  confirmCallback = null;
+}
+
+el.btnConfirmYes.addEventListener("click", async () => {
+  const callback = confirmCallback;
+  closeConfirmModal();
+  if (typeof callback === "function") await callback();
+});
+
+$$("[data-close-confirm]").forEach((elx) => elx.addEventListener("click", closeConfirmModal));
+
+// ============================================================================
+// RIWAYAT: EDIT & HAPUS (event delegation)
+// ============================================================================
+el.riwayatList.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const record = allRecords.find((r) => String(r.id) === String(id));
+  if (!record) return;
+
+  if (btn.dataset.action === "edit-riwayat") {
+    openEditModal(record);
+  } else if (btn.dataset.action === "hapus-riwayat") {
+    openConfirmModal(
+      "Hapus Riwayat",
+      `Hapus riwayat servis "${record.unitAC}" tanggal ${formatDateID(parseDateStr(record.tanggalServis))}? Data akan dipindah ke Arsip dan bisa dipulihkan kapan saja.`,
+      async () => {
+        setLoading(true);
+        const ok = await archiveRecord(id);
+        setLoading(false);
+        if (ok) {
+          showToast("Riwayat dipindahkan ke Arsip ✓", "success");
+          await fetchServiceData();
+        }
+      }
+    );
+  }
+});
+
+// ============================================================================
+// ARSIP: PULIHKAN (event delegation)
+// ============================================================================
+el.arsipList.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const record = allRecords.find((r) => String(r.id) === String(id));
+  if (!record) return;
+
+  if (btn.dataset.action === "pulihkan-riwayat") {
+    openConfirmModal(
+      "Pulihkan Riwayat",
+      `Pulihkan riwayat servis "${record.unitAC}" tanggal ${formatDateID(parseDateStr(record.tanggalServis))} ke daftar Riwayat aktif?`,
+      async () => {
+        setLoading(true);
+        const ok = await restoreRecord(id);
+        setLoading(false);
+        if (ok) {
+          showToast("Riwayat berhasil dipulihkan ✓", "success");
+          await fetchServiceData();
+        }
+      }
+    );
+  }
+});
+
 el.formServis.addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = new FormData(el.formServis);
+  const isEdit = !!editingRecordId;
   const payload = {
+    action: isEdit ? "update" : "create",
     unitAC: formData.get("unitAC"),
     tanggalServis: formData.get("tanggalServis"),
     namaTeknisi: formData.get("namaTeknisi") || "",
     catatan: formData.get("catatan") || ""
   };
+  if (isEdit) payload.id = editingRecordId;
 
   if (!payload.unitAC || !payload.tanggalServis) {
     showToast("Unit AC dan Tanggal Servis wajib diisi.", "error");
@@ -477,7 +714,7 @@ el.formServis.addEventListener("submit", async (e) => {
 
   if (ok) {
     closeServisModal();
-    showToast("Servis berhasil dicatat ✓", "success");
+    showToast(isEdit ? "Perubahan berhasil disimpan ✓" : "Servis berhasil dicatat ✓", "success");
     await fetchServiceData();
   }
 });
@@ -597,7 +834,9 @@ el.riwayatFilter.addEventListener("click", (e) => {
 // EXPORT PDF
 // ============================================================================
 el.btnExportPdf.addEventListener("click", async () => {
-  let records = [...allRecords].sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
+  let records = allRecords
+    .filter((r) => !isArchived(r))
+    .sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
   if (activeRiwayatFilter !== "Semua") {
     records = records.filter((r) => r.unitAC === activeRiwayatFilter);
   }
