@@ -16,8 +16,16 @@ const CONFIG = {
   //    "https://script.google.com/macros/s/AKfycbx.../exec"
   WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzZoxs1Ht08Ei_ijKwxuhApz8crptHEH_nqQKiSi7ClGEf6tyCQLS4-iez1MrLDZXhWIA/exec",
 
-  // Daftar unit AC — ubah sesuai kebutuhan rumah Anda
-  UNITS: ["AC Kamar Utama", "AC Kamar Nayla", "AC Studio", "AC Kamar Arimbi"],
+  // Daftar unit AC — ubah sesuai kebutuhan rumah Anda.
+  // "merk" dan "pk" bersifat tetap per unit (spesifikasi fisik AC-nya),
+  // beda dengan data servis (tanggal/teknisi/catatan) yang berubah tiap kali diservis.
+  // GANTI nilai merk & pk di bawah ini sesuai AC Anda yang sebenarnya.
+  UNITS: [
+    { name: "AC Kamar Utama", merk: "Ganti merk AC ini", pk: "1 PK" },
+    { name: "AC Kamar Nayla", merk: "Ganti merk AC ini", pk: "1 PK" },
+    { name: "AC Kamar Arimbi", merk: "Ganti merk AC ini", pk: "1 PK" },
+    { name: "AC Studio", merk: "Ganti merk AC ini", pk: "1 PK" }
+  ],
 
   // Interval servis berkala (bulan)
   SERVICE_INTERVAL_MONTHS: 2,
@@ -68,6 +76,31 @@ const el = {
   loadingOverlay: $("#loading-overlay"),
   pdfTemplate: $("#pdf-export-template")
 };
+
+// ============================================================================
+// INIT UI DARI CONFIG.UNITS (satu sumber untuk dropdown form & filter riwayat,
+// supaya kalau CONFIG.UNITS diubah, seluruh UI otomatis ikut berubah)
+// ============================================================================
+function initUnitOptionsUI() {
+  // Opsi dropdown "Unit AC" di form Catat Servis
+  const select = document.querySelector("#input-unit");
+  CONFIG.UNITS.forEach((unit) => {
+    const opt = document.createElement("option");
+    opt.value = unit.name;
+    opt.textContent = unit.name;
+    select.appendChild(opt);
+  });
+
+  // Chip filter di tab Riwayat (selain chip "Semua" yang sudah ada di HTML)
+  CONFIG.UNITS.forEach((unit) => {
+    const btn = document.createElement("button");
+    btn.dataset.filter = unit.name;
+    btn.className = "filter-chip";
+    btn.textContent = unit.name.replace(/^AC\s+/i, "");
+    el.riwayatFilter.appendChild(btn);
+  });
+}
+initUnitOptionsUI();
 
 // ============================================================================
 // UTIL: TANGGAL
@@ -271,16 +304,18 @@ const AC_ICON_SVG = `
 
 function renderDashboard() {
   const cards = CONFIG.UNITS.map((unit) => {
-    const s = getUnitStatus(unit);
+    const s = getUnitStatus(unit.name);
+    const spek = [unit.merk, unit.pk].filter(Boolean).join(" · ");
     return `
-      <div class="ac-card status-${s.statusKey}" data-unit="${unit}">
+      <div class="ac-card status-${s.statusKey}" data-unit="${unit.name}">
         <div class="flex items-start justify-between mb-3">
           <div class="flex items-center gap-2.5">
             <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
               ${AC_ICON_SVG}
             </div>
             <div>
-              <h3 class="font-bold text-[15px] leading-tight">${unit}</h3>
+              <h3 class="font-bold text-[15px] leading-tight">${unit.name}</h3>
+              ${spek ? `<p class="text-[11px] text-slate-400 leading-tight">${spek}</p>` : ""}
               <span class="status-pill mt-1">${s.statusLabel}</span>
             </div>
           </div>
@@ -298,10 +333,10 @@ function renderDashboard() {
         </div>
 
         <div class="flex gap-2">
-          <button class="card-action-btn bg-brand-50 text-brand-700 active:bg-brand-100" data-action="tambah-servis" data-unit="${unit}">
+          <button class="card-action-btn bg-brand-50 text-brand-700 active:bg-brand-100" data-action="tambah-servis" data-unit="${unit.name}">
             + Catat Servis
           </button>
-          <button class="card-action-btn bg-slate-100 text-slate-700 active:bg-slate-200" data-action="pengingat" data-unit="${unit}" ${!s.nextDate ? "disabled style=\"opacity:.5\"" : ""}>
+          <button class="card-action-btn bg-slate-100 text-slate-700 active:bg-slate-200" data-action="pengingat" data-unit="${unit.name}" ${!s.nextDate ? "disabled style=\"opacity:.5\"" : ""}>
             🔔 Pengingat
           </button>
         </div>
@@ -310,7 +345,7 @@ function renderDashboard() {
 
   el.dashboardCards.innerHTML = cards;
 
-  const butuhServis = CONFIG.UNITS.filter((u) => getUnitStatus(u).statusKey === "servis").length;
+  const butuhServis = CONFIG.UNITS.filter((u) => getUnitStatus(u.name).statusKey === "servis").length;
   el.summaryBadge.textContent = butuhServis > 0 ? `${butuhServis} unit perlu servis` : "Semua aman";
   el.summaryBadge.className = `text-[11px] font-semibold ${butuhServis > 0 ? "text-red-500" : "text-emerald-500"}`;
 }
