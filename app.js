@@ -252,7 +252,10 @@ async function submitServiceRecord(payload) {
  */
 function getLatestRecordForUnit(unitName) {
   const records = allRecords
-    .filter((r) => r.unitAC === unitName && r.tanggalServis)
+    // "tanggalServis" wajib ada DAN harus bisa di-parse jadi tanggal valid (format YYYY-MM-DD).
+    // Baris dengan format tanggal rusak di Google Sheets sengaja diabaikan di sini,
+    // supaya tidak membuat seluruh dashboard gagal render (lihat catatan di renderDashboard).
+    .filter((r) => r.unitAC === unitName && r.tanggalServis && parseDateStr(r.tanggalServis))
     .sort((a, b) => parseDateStr(b.tanggalServis) - parseDateStr(a.tanggalServis));
   return records[0] || null;
 }
@@ -274,6 +277,17 @@ function getUnitStatus(unitName) {
   }
 
   const lastDate = parseDateStr(latest.tanggalServis);
+  // Jaga-jaga tambahan: kalaupun lolos sampai sini, jangan sampai lastDate null bikin crash.
+  if (!lastDate) {
+    return {
+      unit: unitName,
+      lastDate: null,
+      nextDate: null,
+      statusKey: "servis",
+      statusLabel: "Format Tanggal Tidak Valid",
+      latestRecord: latest
+    };
+  }
   const nextDate = addMonthsClamped(lastDate, CONFIG.SERVICE_INTERVAL_MONTHS);
   const diff = daysBetween(today, nextDate); // positif = masih ke depan
 
@@ -303,8 +317,19 @@ const AC_ICON_SVG = `
   </svg>`;
 
 function renderDashboard() {
-  const cards = CONFIG.UNITS.map((unit) => {
-    const s = getUnitStatus(unit.name);
+  // Hitung status semua unit SEKALI di sini (dipakai ulang untuk kartu & badge ringkasan),
+  // dibungkus try/catch per unit supaya satu data yang bermasalah tidak menjatuhkan semuanya.
+  const statuses = CONFIG.UNITS.map((unit) => {
+    try {
+      return getUnitStatus(unit.name);
+    } catch (err) {
+      console.error(`[renderDashboard] Gagal menghitung status untuk "${unit.name}":`, err);
+      return { statusKey: "servis", statusLabel: "Gagal Memuat Status", lastDate: null, nextDate: null };
+    }
+  });
+
+  const cards = CONFIG.UNITS.map((unit, i) => {
+    const s = statuses[i];
     const spek = [unit.merk, unit.pk].filter(Boolean).join(" · ");
     return `
       <div class="ac-card status-${s.statusKey}" data-unit="${unit.name}">
@@ -345,7 +370,7 @@ function renderDashboard() {
 
   el.dashboardCards.innerHTML = cards;
 
-  const butuhServis = CONFIG.UNITS.filter((u) => getUnitStatus(u.name).statusKey === "servis").length;
+  const butuhServis = statuses.filter((s) => s.statusKey === "servis").length;
   el.summaryBadge.textContent = butuhServis > 0 ? `${butuhServis} unit perlu servis` : "Semua aman";
   el.summaryBadge.className = `text-[11px] font-semibold ${butuhServis > 0 ? "text-red-500" : "text-emerald-500"}`;
 }
