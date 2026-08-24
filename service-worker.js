@@ -13,15 +13,18 @@
 // service-worker.js ini berubah byte-nya — kalau lupa dinaikkan, pengguna
 // yang sudah pernah buka app akan terus disajikan app shell versi lama dari
 // cache, walau file di GitHub sudah ter-update.
-const CACHE_VERSION = 'v1.0.4';
+const CACHE_VERSION = 'v1.0.5';
 const APP_SHELL_CACHE = `servis-ac-shell-${CACHE_VERSION}`;
 const API_CACHE = `servis-ac-api-${CACHE_VERSION}`;
 
+// URL app.js & style.css HARUS sama persis (termasuk "?v=") dengan yang
+// ditulis di index.html, supaya file yang di-precache di sini benar-benar
+// dipakai saat index.html memintanya.
 const APP_SHELL_FILES = [
   './',
   './index.html',
-  './style.css',
-  './app.js',
+  './style.css?v=5',
+  './app.js?v=5',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
