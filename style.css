@@ -1,0 +1,246 @@
+/* ==========================================================================
+   Manajemen Servis AC Rumah — Custom Styles
+   (Melengkapi utility class dari TailwindCSS CDN)
+   ========================================================================== */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html, body {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* ---------- Header: akomodasi Dynamic Island / notch ---------- */
+.app-header {
+  padding-top: calc(var(--safe-top) + 14px);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* ---------- Bottom Nav: akomodasi home indicator iPhone ---------- */
+.bottom-nav {
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.15s ease;
+}
+
+.nav-btn span { line-height: 1; }
+
+.nav-btn-active {
+  color: #2563eb;
+}
+
+/* ---------- Floating Action Button ---------- */
+.fab {
+  width: 60px;
+  height: 60px;
+  right: calc(var(--safe-right) + 20px);
+  bottom: calc(var(--safe-bottom) + 84px);
+  transition: transform 0.12s ease;
+}
+.fab:active { transform: scale(0.92); }
+
+/* ---------- Kartu Unit AC ---------- */
+.ac-card {
+  position: relative;
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px 16px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.05);
+  border: 1px solid #f1f5f9;
+  overflow: hidden;
+}
+
+.ac-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+}
+
+.ac-card.status-aman::before { background: #22c55e; }
+.ac-card.status-segera::before { background: #f59e0b; }
+.ac-card.status-servis::before { background: #ef4444; }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.status-pill::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+.status-aman .status-pill { background: #dcfce7; color: #15803d; }
+.status-aman .status-pill::before { background: #22c55e; }
+
+.status-segera .status-pill { background: #fef3c7; color: #b45309; }
+.status-segera .status-pill::before { background: #f59e0b; }
+
+.status-servis .status-pill { background: #fee2e2; color: #b91c1c; }
+.status-servis .status-pill::before { background: #ef4444; }
+
+.card-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 10px;
+  border-radius: 12px;
+  transition: background-color 0.15s ease;
+  flex: 1;
+}
+
+/* ---------- Skeleton loader ---------- */
+.skeleton-card {
+  height: 128px;
+  border-radius: 20px;
+  background: linear-gradient(100deg, #e2e8f0 30%, #f1f5f9 50%, #e2e8f0 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+
+/* ---------- Riwayat list item ---------- */
+.riwayat-item {
+  background: #fff;
+  border-radius: 16px;
+  padding: 12px 14px;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* ---------- Filter chips ---------- */
+.filter-chip {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.filter-chip-active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+/* ---------- Form ---------- */
+.form-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.form-input:focus {
+  border-color: #2563eb;
+  background: #fff;
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay { display: flex; }
+.modal-overlay.hidden { display: none; }
+
+.modal-sheet {
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+  animation: sheet-in 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.modal-backdrop {
+  animation: fade-in 0.2s ease;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  bottom: calc(var(--safe-bottom) + 96px);
+  max-width: calc(100% - 32px);
+  animation: toast-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.toast-success { background: #16a34a; }
+.toast-error { background: #dc2626; }
+.toast-info { background: #334155; }
+
+/* ---------- Spinner ---------- */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2.5px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#refresh-icon.spinning { animation: spin 0.8s linear infinite; }
+
+/* ---------- Tab panels ---------- */
+.tab-panel.hidden { display: none; }
+
+/* ---------- PDF export (offscreen render target) ---------- */
+#pdf-export-template {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 700px;
+  background: #fff;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+}
