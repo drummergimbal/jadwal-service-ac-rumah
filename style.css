@@ -271,11 +271,20 @@ html, body {
 /* ---------- Tab panels ---------- */
 .tab-panel.hidden { display: none; }
 
-/* ---------- PDF export (offscreen render target) ---------- */
+/* ---------- PDF export (render target untuk html2pdf) ---------- */
+/* PENTING: JANGAN pakai "position: fixed/absolute" atau margin negatif
+   raksasa (mis. left:-9999px) di sini untuk "menyembunyikan" elemen ini.
+   html2canvas (dipakai html2pdf.js) TERBUKTI GAGAL merender elemen yang
+   diposisikan di luar alur dokumen normal seperti itu — hasilnya PDF halaman
+   kosong (pernah terjadi, lihat riwayat perbaikan). Elemen ini SENGAJA
+   dibiarkan pada posisi normal (position: static, bawaan) supaya
+   layout/render-nya valid untuk html2canvas. Elemen ini tetap tidak pernah
+   terlihat pengguna karena: (1) class "hidden" (display:none) selalu
+   dipasang di luar proses export, dan (2) saat export.js melepas class
+   "hidden" sesaat untuk proses render, seluruh layar sudah tertutup
+   #loading-overlay (lihat app.js: setLoading(true) dipanggil sebelum ini).
+*/
 #pdf-export-template {
-  position: fixed;
-  left: -9999px;
-  top: 0;
   width: 700px;
   background: #fff;
   color: #0f172a;

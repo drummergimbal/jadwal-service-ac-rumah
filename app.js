@@ -885,11 +885,33 @@ el.btnExportPdf.addEventListener("click", async () => {
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
   };
 
+  // PENTING (dua lapis, keduanya WAJIB, sudah diuji langsung — pernah gagal
+  // total sebelum ini):
+  // 1) Elemen ini punya class "hidden" (display:none) di index.html supaya
+  //    tidak pernah kelihatan di UI biasa. html2canvas (dipakai html2pdf.js)
+  //    TIDAK BISA merender elemen display:none sama sekali -> class "hidden"
+  //    WAJIB dilepas sesaat sebelum render, lalu dipasang lagi setelah selesai.
+  // 2) style.css SENGAJA tidak lagi memakai trik "posisi di luar layar"
+  //    (position:fixed/absolute + left:-9999px) untuk elemen ini — html2canvas
+  //    TERBUKTI GAGAL merender elemen yang diposisikan begitu (hasilnya PDF
+  //    halaman kosong, walau ukuran file-nya terlihat normal). Elemen ini
+  //    sekarang dirender pada posisi normal (in-flow) dan disembunyikan dari
+  //    pandangan pengguna dengan cara lain: #loading-overlay (setLoading(true))
+  //    menutupi SELURUH layar tepat sebelum class "hidden" dilepas.
+  setLoading(true);
+  el.pdfTemplate.classList.remove("hidden");
+
   try {
+    // Beri browser satu frame untuk benar-benar melayout & mengecat ulang
+    // konten yang baru saja dimasukkan sebelum html2canvas mengambil snapshot-nya.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await html2pdf().set(opt).from(el.pdfTemplate).save();
   } catch (err) {
     console.error(err);
     showToast("Gagal membuat PDF: " + err.message, "error");
+  } finally {
+    el.pdfTemplate.classList.add("hidden");
+    setLoading(false);
   }
 });
 

@@ -13,7 +13,7 @@
 // service-worker.js ini berubah byte-nya — kalau lupa dinaikkan, pengguna
 // yang sudah pernah buka app akan terus disajikan app shell versi lama dari
 // cache, walau file di GitHub sudah ter-update.
-const CACHE_VERSION = 'v1.0.9';
+const CACHE_VERSION = 'v1.0.10';
 const APP_SHELL_CACHE = `servis-ac-shell-${CACHE_VERSION}`;
 const API_CACHE = `servis-ac-api-${CACHE_VERSION}`;
 
@@ -23,8 +23,8 @@ const API_CACHE = `servis-ac-api-${CACHE_VERSION}`;
 const APP_SHELL_FILES = [
   './',
   './index.html',
-  './style.css?v=9',
-  './app.js?v=9',
+  './style.css?v=10',
+  './app.js?v=10',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
