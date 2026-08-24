@@ -8,7 +8,12 @@
  *    tapi app tetap bisa menampilkan sesuatu).
  */
 
-const CACHE_VERSION = 'v1.0.0';
+// PENTING: naikkan angka ini SETIAP KALI index.html/style.css/app.js diubah.
+// Browser hanya mendeteksi ada versi Service Worker baru kalau isi file
+// service-worker.js ini berubah byte-nya — kalau lupa dinaikkan, pengguna
+// yang sudah pernah buka app akan terus disajikan app shell versi lama dari
+// cache, walau file di GitHub sudah ter-update.
+const CACHE_VERSION = 'v1.0.1';
 const APP_SHELL_CACHE = `servis-ac-shell-${CACHE_VERSION}`;
 const API_CACHE = `servis-ac-api-${CACHE_VERSION}`;
 
