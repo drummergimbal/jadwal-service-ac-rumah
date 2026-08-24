@@ -21,10 +21,10 @@ const CONFIG = {
   // beda dengan data servis (tanggal/teknisi/catatan) yang berubah tiap kali diservis.
   // GANTI nilai merk & pk di bawah ini sesuai AC Anda yang sebenarnya.
   UNITS: [
-    { name: "AC Kamar Utama", merk: "Ganti merk AC ini", pk: "1 PK" },
-    { name: "AC Kamar Nayla", merk: "Ganti merk AC ini", pk: "1 PK" },
-    { name: "AC Kamar Arimbi", merk: "Ganti merk AC ini", pk: "1 PK" },
-    { name: "AC Studio", merk: "Ganti merk AC ini", pk: "1 PK" }
+    { name: "AC Kamar Utama", merk: "Electrolux CSR-09CR", pk: "1 PK" },
+    { name: "AC Kamar Nayla", merk: "Panasonic CS-ZNSYKP", pk: "0.5 PK" },
+    { name: "AC Kamar Arimbi", merk: "Panasonic CS-PCGPKJ", pk: "1 PK" },
+    { name: "AC Studio", merk: "GREE 6WC-09158/1", pk: "1 PK" }
   ],
 
   // Interval servis berkala (bulan)
